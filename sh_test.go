@@ -104,3 +104,10 @@ func Example(t *testing.T) {
 		s.Command("ll", "local").Command("awk", "{print $1, $NF}").Command("grep", "bin").Run()
 	}
 }
+
+func TestArrary(t *testing.T) {
+	s := NewSession()
+	s.Command("ls", []string{
+		"-l", "-a",
+	}).Run()
+}

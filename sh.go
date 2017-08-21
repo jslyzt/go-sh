@@ -33,6 +33,7 @@ import (
 	"os"
 	"os/exec"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -100,19 +101,97 @@ func (s *Session) Alias(alias, cmd string, args ...string) {
 	s.alias[alias] = v
 }
 
+func value2string(any interface{}) (string, bool) {
+	anyt := reflect.TypeOf(any)
+	anyv := reflect.ValueOf(any)
+	switch anyt.Kind() {
+	case reflect.Bool:
+		return base2string(anyv.Bool())
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return base2string(anyv.Int())
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		return base2string(anyv.Uint())
+	case reflect.Float32, reflect.Float64:
+		return base2string(anyv.Float())
+	case reflect.Complex64, reflect.Complex128:
+		return base2string(anyv.Complex())
+	case reflect.String:
+		return anyv.String(), true
+	default:
+		return "", false
+	}
+}
+
+func base2string(any interface{}) (value string, success bool) {
+	value = ""
+	success = true
+	switch anyi := any.(type) {
+	case string:
+		value = any.(string)
+	case bool:
+		value = strconv.FormatBool(any.(bool))
+	case int:
+		value = strconv.FormatInt(int64(any.(int)), 10)
+	case int8:
+		value = strconv.FormatInt(int64(any.(int8)), 10)
+	case int16:
+		value = strconv.FormatInt(int64(any.(int16)), 10)
+	case int32:
+		value = strconv.FormatInt(int64(any.(int32)), 10)
+	case int64:
+		value = strconv.FormatInt(int64(any.(int64)), 10)
+	case uint:
+		value = strconv.FormatUint(uint64(any.(uint)), 10)
+	case uint8:
+		value = strconv.FormatUint(uint64(any.(uint8)), 10)
+	case uint16:
+		value = strconv.FormatUint(uint64(any.(uint16)), 10)
+	case uint32:
+		value = strconv.FormatUint(uint64(any.(uint32)), 10)
+	case uint64:
+		value = strconv.FormatUint(uint64(any.(uint64)), 10)
+	case float32:
+		value = strconv.FormatFloat(float64(any.(float32)), 'f', 2, 32)
+	case float64:
+		value = strconv.FormatFloat(any.(float64), 'f', 4, 64)
+	case reflect.Value:
+		if anyi.IsValid() && anyi.CanInterface() {
+			return value2string(anyi.Interface())
+		} else {
+			return value2string(any)
+		}
+	default:
+		success = false
+	}
+	return
+}
+
 func (s *Session) Command(name string, a ...interface{}) *Session {
 	var args = make([]string, 0)
-	var sType = reflect.TypeOf("")
-
 	// init cmd, args, dir, envs
 	// if not init, program may panic
 	s.inj.Map(name).Map(args).Map(s.dir).Map(map[string]string{})
 	for _, v := range a {
-		switch reflect.TypeOf(v) {
-		case sType:
+		switch reflect.TypeOf(v).Kind() {
+		case reflect.String:
 			args = append(args, v.(string))
+		case reflect.Array, reflect.Slice:
+			{
+				av := reflect.ValueOf(v)
+				for i := 0; i < av.Len(); i++ {
+					sval, succ := base2string(av.Index(i))
+					if succ {
+						args = append(args, sval)
+					}
+				}
+			}
 		default:
-			s.inj.Map(v)
+			sval, succ := base2string(v)
+			if succ {
+				args = append(args, sval)
+			} else {
+				s.inj.Map(v)
+			}
 		}
 	}
 	if len(args) != 0 {
